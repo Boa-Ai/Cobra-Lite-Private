@@ -33,6 +33,7 @@ COBRA_EXECUTION_MODE = (os.getenv("COBRA_EXECUTION_MODE", "cli_only").strip().lo
 COBRA_REQUIRE_LIVE_TELEMETRY = env_flag("COBRA_REQUIRE_LIVE_TELEMETRY", True)
 COBRA_ALLOW_NONSTREAM_FALLBACK = env_flag("COBRA_ALLOW_NONSTREAM_FALLBACK", False)
 COBRA_REQUIRE_TERMINAL_ACTIONS = env_flag("COBRA_REQUIRE_TERMINAL_ACTIONS", True)
+COBRA_AUTO_INSTALL_TOOLS = env_flag("COBRA_AUTO_INSTALL_TOOLS", True)
 
 STATE_FILE = Path(os.getenv("STATE_FILE", BASE_DIR / ".claw_state.json"))
 SESSIONS_FILE = Path(os.getenv("SESSIONS_FILE", BASE_DIR / ".claw_sessions.json"))
@@ -63,6 +64,26 @@ OPENCLAW_DEVICE_AUTH_PATH = Path(
 
 DIAGNOSTIC_EXEC_LINE_RE = re.compile(r"^\s*[⚠️❌✅]?\s*🛠️\s*Exec:", re.IGNORECASE)
 
+if COBRA_AUTO_INSTALL_TOOLS:
+    MISSING_TOOL_RUNTIME_POLICY = """- If a command is missing (e.g. "command not found" or exit code 127), do not stop there.
+- Attempt to install the missing command with the system package manager when possible.
+- Detect package manager in this order: apt-get, dnf, yum, apk, pacman, brew.
+- Use non-interactive installs and avoid hanging prompts (e.g. sudo -n when sudo is needed).
+- For DNS binaries, map command to package names:
+  - Debian/Ubuntu: host/dig/nslookup -> dnsutils
+  - Fedora/RHEL: host/dig/nslookup -> bind-utils
+  - Alpine: host/dig/nslookup -> bind-tools
+- After install, verify with `command -v <cmd>` and re-run the original command.
+- If installation fails (permissions/network/package unavailable), report the exact failure and continue with available tools.
+- Do not use multi-target `which` checks that fail when any single binary is missing; use per-command `command -v` checks."""
+    MISSING_TOOL_SECURITY_POLICY = (
+        "If a command is unavailable, attempt package-manager installation, verify availability, and re-run it. "
+        "If install fails, report the exact reason and continue with available tools."
+    )
+else:
+    MISSING_TOOL_RUNTIME_POLICY = "- If a command is missing, report it clearly and continue with available CLI commands."
+    MISSING_TOOL_SECURITY_POLICY = "If a command is unavailable, say it is missing and continue with available CLI tooling."
+
 CLI_ONLY_EXTRA_SYSTEM_PROMPT = """Runtime policy for this interface:
 - Use terminal/local tools only.
 - Allowed style: exec/bash/process and local workspace/file operations as needed.
@@ -71,7 +92,7 @@ CLI_ONLY_EXTRA_SYSTEM_PROMPT = """Runtime policy for this interface:
 - Do NOT use browser.
 - Do NOT use web_search or web_fetch (or any web_* tool).
 - Do NOT rely on external API keys beyond the configured model provider.
-- If a command is missing, report it clearly and continue with available CLI commands."""
+{missing_tool_policy}""".format(missing_tool_policy=MISSING_TOOL_RUNTIME_POLICY)
 
 SECURITY_CONTEXT = """You are a CLI-first security testing agent with access to terminal tools and local workspace operations.
 
@@ -87,10 +108,10 @@ When testing:
 4. Be thorough but responsible
 5. Synthesize a clean final report; do not dump raw event fragments or repeated partial notes
 6. Do not call browser, web_search, web_fetch, or any web_* tool.
-7. If a command is unavailable, say it is missing and continue with available CLI tooling.
+7. {missing_tool_policy}
 
 Final response format (always follow):
 - Objective
 - Actions Taken (include notable commands/tools used)
 - Findings
-- Recommended Next Steps"""
+- Recommended Next Steps""".format(missing_tool_policy=MISSING_TOOL_SECURITY_POLICY)

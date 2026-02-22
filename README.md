@@ -58,6 +58,9 @@ HOST=0.0.0.0 python app.py
 # Custom OpenClaw Gateway URL
 OPENCLAW_GATEWAY_URL=http://your-gateway:18789 python app.py
 
+# Disable auto-install (it is enabled by default)
+COBRA_AUTO_INSTALL_TOOLS=0 python app.py
+
 # Flask secret key (recommended for production)
 FLASK_SECRET_KEY="your-secret-key" python app.py
 ```
@@ -69,6 +72,7 @@ FLASK_SECRET_KEY=your-secret-key
 OPENCLAW_GATEWAY_URL=http://127.0.0.1:18789
 PORT=5001
 HOST=127.0.0.1
+COBRA_AUTO_INSTALL_TOOLS=1
 ```
 
 ## Usage
@@ -147,7 +151,14 @@ Cobra Lite can:
 
 ### No Tools Available
 
-If security tools aren't working, ensure they're installed on the system running OpenClaw Gateway:
+Auto-install is enabled by default. If it was disabled, re-enable it, or install tools manually on the system running OpenClaw Gateway:
+```bash
+# Auto-install attempt mode (agent will try apt/dnf/yum/apk/pacman/brew when commands are missing)
+export COBRA_AUTO_INSTALL_TOOLS=1
+python app.py
+```
+
+Manual install example:
 ```bash
 # Example: Install common tools
 sudo apt update

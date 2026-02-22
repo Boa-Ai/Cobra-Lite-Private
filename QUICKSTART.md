@@ -26,6 +26,8 @@ pip install -r requirements.txt
 ```bash
 # Optional (default): enforce CLI-only tool policy
 export COBRA_EXECUTION_MODE=cli_only
+# Optional: disable auto-install attempts for missing tools
+export COBRA_AUTO_INSTALL_TOOLS=0
 
 python app.py
 ```
@@ -71,7 +73,13 @@ App auto-selects next available port. Check startup message.
 Use the in-app prompt to save your `sk-ant-...` key, then resend the prompt.
 
 ### No security tools available
-Install tools on the same system running the gateway:
+Auto-install attempts are enabled by default. If needed, re-enable them, or install tools manually on the same system running the gateway:
+```bash
+export COBRA_AUTO_INSTALL_TOOLS=1
+python app.py
+```
+
+Manual install:
 ```bash
 # Ubuntu/Debian
 sudo apt install nmap curl nikto
