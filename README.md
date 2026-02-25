@@ -1,8 +1,9 @@
 
 
 # Cobra Lite - An OpenClaw Hacking Copilot
+![Banner](static/images/GithubBannerV1.png)
 
-![Cobra Lite demo screenshot](static/images/Demo_screenshot.png)
+
 [![Discord](https://img.shields.io/badge/Discord-Join_Our_Community!-blue?logo=discord&logoColor=white)](https://discord.gg/4jFrWk48XN)
 
 A web-based security testing interface powered by **OpenClaw** - your AI-driven penetration testing assistant.
@@ -16,6 +17,9 @@ Cobra Lite provides a chat-style interface for security testing tasks, leveragin
 - **Web Research** - Search for CVEs, exploits, and security documentation
 - **Multi-Agent Coordination** - Spawn sub-agents for different testing phases
 - **File Operations** - Generate reports, save findings, organize results
+
+
+![Cobra Lite demo screenshot](static/images/Demo_screenshot.png)
 
 ## Quick Start
 
