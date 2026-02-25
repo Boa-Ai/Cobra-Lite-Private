@@ -4,7 +4,10 @@
 ![Banner](static/images/GithubBannerV1.png)
 
 
-[![Discord](https://img.shields.io/badge/Discord-Join_Our_Community!-blue?logo=discord&logoColor=white)](https://discord.gg/4jFrWk48XN)
+[![Discord](https://img.shields.io/badge/Discord-7289DA?logo=discord&logoColor=white)](https://discord.gg/4jFrWk48XN)
+[![Linux_Supported](https://img.shields.io/badge/Linux-Supported-green?logo=linux&logoColor=white)](https://discord.gg/4jFrWk48XN)
+[![WSL_Supported](https://img.shields.io/badge/WSL-Supported-green?logo=wish&logoColor=white)](https://discord.gg/4jFrWk48XN)
+
 
 A web-based security testing interface powered by **OpenClaw** - your AI-driven penetration testing assistant.
 
