@@ -39,7 +39,8 @@ ANSI_ESCAPE_RE = re.compile(r"\x1B\[[0-?]*[ -/]*[@-~]")
 FALLBACK_EXEC_LINE_RE = re.compile(r"^\s*(?:[⚠️❌✅]?\s*)?(?:🛠️\s*)?Exec:", re.IGNORECASE)
 AUTH_STORE_VERSION = 1
 COBRA_ANTHROPIC_PROFILE_ID = "anthropic:cobra-lite"
-AUTO_CONTINUE_MAX_ATTEMPTS = max(1, int(os.getenv("COBRA_AUTO_CONTINUE_MAX_ATTEMPTS", "4")))
+# Set to 0 (or a negative value) for unlimited auto-continue attempts.
+AUTO_CONTINUE_MAX_ATTEMPTS = int(os.getenv("COBRA_AUTO_CONTINUE_MAX_ATTEMPTS", "0"))
 
 
 class RunCancelledError(Exception):
@@ -564,14 +565,21 @@ def send_to_openclaw(
                 max_size=8_000_000,
                 open_timeout=REQUEST_TIMEOUT_SECONDS,
             ) as ws:
-                recv_deadline = time.time() + OPENCLAW_AGENT_TIMEOUT_SECONDS + 30
+                recv_deadline = None
+                if OPENCLAW_AGENT_TIMEOUT_SECONDS > 0:
+                    recv_deadline = time.time() + OPENCLAW_AGENT_TIMEOUT_SECONDS + 30
                 while True:
                     _raise_if_cancelled()
-                    remaining = recv_deadline - time.time()
-                    if remaining <= 0:
-                        raise TimeoutError("Gateway websocket receive timed out.")
+                    remaining = None
+                    if recv_deadline is not None:
+                        remaining = recv_deadline - time.time()
+                        if remaining <= 0:
+                            raise TimeoutError("Gateway websocket receive timed out.")
                     try:
-                        raw = await asyncio.wait_for(ws.recv(), timeout=min(1.0, max(0.1, remaining)))
+                        recv_timeout = 1.0
+                        if remaining is not None:
+                            recv_timeout = min(1.0, max(0.1, remaining))
+                        raw = await asyncio.wait_for(ws.recv(), timeout=recv_timeout)
                     except asyncio.TimeoutError:
                         continue
                     msg = json.loads(raw)
@@ -779,8 +787,9 @@ def send_to_openclaw(
                             "sessionId": active_session_id,
                             "sessionKey": active_session_id,
                             "idempotencyKey": str(uuid.uuid4()),
-                            "timeout": OPENCLAW_AGENT_TIMEOUT_SECONDS,
                         }
+                        if OPENCLAW_AGENT_TIMEOUT_SECONDS > 0:
+                            agent_params["timeout"] = OPENCLAW_AGENT_TIMEOUT_SECONDS
                         if COBRA_EXECUTION_MODE in {"cli_only", "cli", "terminal_only"}:
                             agent_params["extraSystemPrompt"] = CLI_ONLY_EXTRA_SYSTEM_PROMPT
                         await ws.send(
@@ -829,18 +838,21 @@ def send_to_openclaw(
             "--json",
             "--verbose",
             verbose_switch,
-            "--timeout",
-            str(OPENCLAW_AGENT_TIMEOUT_SECONDS),
         ]
+        if OPENCLAW_AGENT_TIMEOUT_SECONDS > 0:
+            command.extend(["--timeout", str(OPENCLAW_AGENT_TIMEOUT_SECONDS)])
         if shutil.which("stdbuf"):
             command = ["stdbuf", "-oL", "-eL", *command]
+        timeout_fragment = (
+            f"--timeout {OPENCLAW_AGENT_TIMEOUT_SECONDS}" if OPENCLAW_AGENT_TIMEOUT_SECONDS > 0 else "--timeout <unlimited>"
+        )
         command_text = (
             "openclaw agent "
             f"--session-id {active_session_id} "
             "--message <omitted> "
             "--json "
             f"--verbose {verbose_switch} "
-            f"--timeout {OPENCLAW_AGENT_TIMEOUT_SECONDS}"
+            f"{timeout_fragment}"
         )
 
         if progress_callback:
@@ -992,7 +1004,10 @@ def send_to_openclaw(
                     current_action_output_lines.append(clean_line)
                     _emit_running_action_update(clean_line)
 
-            return_code = process.wait(timeout=OPENCLAW_AGENT_TIMEOUT_SECONDS + 15)
+            if OPENCLAW_AGENT_TIMEOUT_SECONDS > 0:
+                return_code = process.wait(timeout=OPENCLAW_AGENT_TIMEOUT_SECONDS + 15)
+            else:
+                return_code = process.wait()
         except subprocess.TimeoutExpired:
             process.kill()
             return_code = process.wait(timeout=5)
@@ -1332,7 +1347,10 @@ def send_to_openclaw(
         attempt_index += 1
         result = _send_once(_build_prompt(followup_prompt))
         final_observation = str(result.get("final_observation") or "").strip()
-        should_retry = _needs_auto_continue(final_observation) and attempt_index < AUTO_CONTINUE_MAX_ATTEMPTS
+        unlimited_retries = AUTO_CONTINUE_MAX_ATTEMPTS <= 0
+        should_retry = _needs_auto_continue(final_observation) and (
+            unlimited_retries or attempt_index < AUTO_CONTINUE_MAX_ATTEMPTS
+        )
         if not should_retry:
             return result
 
@@ -1343,7 +1361,8 @@ def send_to_openclaw(
                     "data": {
                         "text": (
                             "Run hit an execution-action limit before task completion; "
-                            f"auto-continuing ({attempt_index + 1}/{AUTO_CONTINUE_MAX_ATTEMPTS})."
+                            f"auto-continuing ({attempt_index + 1}/"
+                            f"{'unlimited' if unlimited_retries else AUTO_CONTINUE_MAX_ATTEMPTS})."
                         )
                     },
                 }

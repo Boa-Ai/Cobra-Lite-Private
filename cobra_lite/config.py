@@ -50,7 +50,8 @@ def default_openclaw_gateway_url() -> str:
 OPENCLAW_GATEWAY_URL = default_openclaw_gateway_url()
 OPENCLAW_SESSION_KEY = os.getenv("OPENCLAW_SESSION_KEY", "")
 OPENCLAW_SESSION_ID = os.getenv("OPENCLAW_SESSION_ID", OPENCLAW_SESSION_KEY or "cobra-lite")
-OPENCLAW_AGENT_TIMEOUT_SECONDS = int(os.getenv("OPENCLAW_AGENT_TIMEOUT_SECONDS", "180"))
+# Set to 0 (or a negative value) for no local timeout cap.
+OPENCLAW_AGENT_TIMEOUT_SECONDS = int(os.getenv("OPENCLAW_AGENT_TIMEOUT_SECONDS", "0"))
 OPENCLAW_VERBOSE_LEVEL = os.getenv("OPENCLAW_VERBOSE_LEVEL", "full").strip() or "full"
 OPENCLAW_PROTOCOL_VERSION = 3
 GATEWAY_SCOPES = ["operator.admin", "operator.approvals", "operator.pairing"]
