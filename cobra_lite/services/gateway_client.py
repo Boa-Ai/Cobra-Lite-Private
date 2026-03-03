@@ -69,9 +69,9 @@ def _resolve_ws_gateway_url(gateway_url: str) -> str:
     raise ValueError(f"Unsupported gateway URL scheme: {parsed.scheme or 'unknown'}")
 
 
-def _load_device_identity() -> dict[str, str]:
+def _load_device_identity() -> dict[str, str] | None:
     if not OPENCLAW_IDENTITY_PATH.exists():
-        raise FileNotFoundError(f"Missing device identity file: {OPENCLAW_IDENTITY_PATH}")
+        return None
     data = json.loads(OPENCLAW_IDENTITY_PATH.read_text(encoding="utf-8"))
     for key in ("deviceId", "publicKeyPem", "privateKeyPem"):
         value = data.get(key)
@@ -518,6 +518,7 @@ def send_to_openclaw(
         async def _run() -> dict[str, Any]:
             ws_url = _resolve_ws_gateway_url(gateway_url)
             identity = _load_device_identity()
+            has_device_identity = identity is not None
 
             connect_request_id = str(uuid.uuid4())
             patch_request_id = str(uuid.uuid4())
@@ -591,7 +592,6 @@ def send_to_openclaw(
 
                         if event_name == "connect.challenge" and not connect_sent:
                             nonce = str((payload or {}).get("nonce") or "")
-                            device, token = _build_device_auth(identity, nonce=nonce, role="operator")
                             params: dict[str, Any] = {
                                 "minProtocol": OPENCLAW_PROTOCOL_VERSION,
                                 "maxProtocol": OPENCLAW_PROTOCOL_VERSION,
@@ -606,8 +606,11 @@ def send_to_openclaw(
                                 "caps": ["tool-events"],
                                 "role": "operator",
                                 "scopes": GATEWAY_SCOPES,
-                                "device": device,
                             }
+                            token = None
+                            if has_device_identity:
+                                device, token = _build_device_auth(identity, nonce=nonce, role="operator")
+                                params["device"] = device
                             auth_password = os.getenv("OPENCLAW_GATEWAY_PASSWORD", "").strip()
                             if token or auth_password:
                                 params["auth"] = {
