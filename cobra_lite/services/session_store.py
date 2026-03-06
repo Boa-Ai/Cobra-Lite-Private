@@ -9,6 +9,7 @@ from cobra_lite.config import CHAT_HISTORY_MAX_CHARS, CHAT_HISTORY_MAX_MESSAGES
 
 VALID_ROLES = {"user", "assistant"}
 MAX_EXECUTION_HTML_CHARS = 600_000
+MAX_OVERVIEW_CHARS = 2_400
 
 
 class SessionStore:
@@ -107,6 +108,10 @@ class SessionStore:
         execution_html = str(session.get("execution_html") or "")
         if len(execution_html) > MAX_EXECUTION_HTML_CHARS:
             execution_html = execution_html[-MAX_EXECUTION_HTML_CHARS:]
+        overview = self._normalize_overview_text(session.get("overview"))
+        overview_updated_at = session.get("overview_updated_at")
+        if not isinstance(overview_updated_at, (int, float)):
+            overview_updated_at = None
 
         return {
             "id": session_id,
@@ -115,7 +120,15 @@ class SessionStore:
             "updated_at": float(updated_at),
             "messages": messages,
             "execution_html": execution_html,
+            "overview": overview,
+            "overview_updated_at": float(overview_updated_at) if isinstance(overview_updated_at, (int, float)) else None,
         }
+
+    def _normalize_overview_text(self, value: Any) -> str:
+        text = str(value or "").replace("\r\n", "\n").replace("\r", "\n").strip()
+        if len(text) <= MAX_OVERVIEW_CHARS:
+            return text
+        return text[: MAX_OVERVIEW_CHARS - 16].rstrip() + "\n...(truncated)"
 
     def _ensure_session(self, state: dict[str, Any], session_id: str) -> dict[str, Any]:
         sessions = state.setdefault("sessions", {})
@@ -130,6 +143,8 @@ class SessionStore:
                 "updated_at": now,
                 "messages": [],
                 "execution_html": "",
+                "overview": "",
+                "overview_updated_at": None,
             }
         sessions[session_id] = normalized
         return normalized
@@ -197,6 +212,8 @@ class SessionStore:
                 "updated_at": now,
                 "messages": [],
                 "execution_html": "",
+                "overview": "",
+                "overview_updated_at": None,
             }
             sessions = state.setdefault("sessions", {})
             sessions[session_id] = session
@@ -219,6 +236,24 @@ class SessionStore:
                 text = text[-MAX_EXECUTION_HTML_CHARS:]
             session["execution_html"] = text
             session["updated_at"] = time.time()
+            sessions[session_id] = session
+            self._save(state)
+            return session
+
+    def update_overview(self, session_id: str, overview: str) -> dict[str, Any] | None:
+        with self._lock:
+            state = self._load()
+            sessions = state.get("sessions")
+            if not isinstance(sessions, dict):
+                return None
+            raw = sessions.get(session_id)
+            session = self._normalize_session(raw, session_id) if raw is not None else None
+            if not session:
+                return None
+            now = time.time()
+            session["overview"] = self._normalize_overview_text(overview)
+            session["overview_updated_at"] = now if session["overview"] else None
+            session["updated_at"] = now
             sessions[session_id] = session
             self._save(state)
             return session

@@ -272,6 +272,7 @@ def send_to_openclaw(
     session_id: str | None = None,
     anthropic_api_key: str | None = None,
     graph_context: str | None = None,
+    mission_overview: str | None = None,
     progress_callback: Optional[Any] = None,
     cancel_event: threading.Event | None = None,
 ) -> dict[str, Any]:
@@ -318,7 +319,17 @@ def send_to_openclaw(
             "<graph_update>{\"nodes\":[{\"type\":\"Finding\",\"label\":\"Clear high-level title\",\"description\":\"Why this matters\",\"status\":\"new\",\"severity\":\"info\",\"confidence\":0.7}]}</graph_update>\n"
             "Do not mention this block in prose. If nothing meaningful changed, omit the block."
         )
-    _base_system_prefix = f"{SECURITY_CONTEXT}{graph_prompt_suffix}\n\n"
+    overview_memory = str(mission_overview or "").strip()
+    overview_prompt_suffix = (
+        "\n\nPersistent mission overview (auto-maintained across runs):\n"
+        f"{overview_memory or 'No mission overview recorded yet.'}\n\n"
+        "Overview policy: at the end of every completed run, append exactly one hidden block containing the full "
+        "updated overview for the entire mission so far:\n"
+        "<mission_overview>- concise bullet or paragraph summary of the whole mission</mission_overview>\n"
+        "This block replaces the previous overview. Keep it brief, high-signal, and scoped to the mission as a whole. "
+        "Do not mention the block in prose."
+    )
+    _base_system_prefix = f"{SECURITY_CONTEXT}{graph_prompt_suffix}{overview_prompt_suffix}\n\n"
 
     def _build_prompt(user_text: str) -> str:
         return f"{_base_system_prefix}{user_text}{enforcement_suffix}"

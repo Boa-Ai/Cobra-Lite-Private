@@ -158,10 +158,20 @@
                 role="tabpanel"
                 aria-labelledby="mission-tab-overview"
               >
-                <div class="mission-placeholder-card">
-                  <span class="mission-placeholder-kicker">Overview</span>
-                  <h3>NOT IMPLEMENTED</h3>
-                  <p>This view should become the mission summary surface once overview blocks are defined.</p>
+                <div class="mission-overview-card">
+                  <div class="mission-overview-head">
+                    <div>
+                      <span class="mission-placeholder-kicker">Tracked Overview</span>
+                      <h3>Mission Summary</h3>
+                    </div>
+                    <div id="mission-overview-status" class="mission-overview-status">Awaiting first run</div>
+                  </div>
+                  <div id="mission-overview-content" class="mission-overview-content markdown-content">
+                    No mission overview yet.
+                  </div>
+                  <p class="mission-overview-note">
+                    The agent rewrites this concise mission overview after each completed run and it persists with the mission.
+                  </p>
                 </div>
               </section>
               <section

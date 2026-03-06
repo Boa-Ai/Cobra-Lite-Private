@@ -14,6 +14,8 @@ const missionTabEvidence = document.getElementById("mission-tab-evidence");
 const missionTabPlan = document.getElementById("mission-tab-plan");
 const missionTabChat = document.getElementById("mission-tab-chat");
 const missionActiveTitle = document.getElementById("mission-active-title");
+const missionOverviewStatus = document.getElementById("mission-overview-status");
+const missionOverviewContent = document.getElementById("mission-overview-content");
 const missionOverviewView = document.getElementById("mission-overview-view");
 const missionFindingsView = document.getElementById("mission-findings-view");
 const missionEvidenceView = document.getElementById("mission-evidence-view");
@@ -95,6 +97,8 @@ const FILE_SELECTOR_HEIGHT_STORAGE_KEY = "cobraLite.filesSelectorHeight.v1";
 
 let activeSessionId = null;
 let activeSessionMessages = [];
+let activeSessionOverview = "";
+let activeSessionOverviewUpdatedAt = null;
 let sessionSummaries = [];
 let anthropicConfigured = hasAnthropicKey;
 let sessionPaneCollapsed = false;
@@ -388,6 +392,30 @@ function syncActiveMissionHeader(title) {
   if (!missionActiveTitle) return;
   missionActiveTitle.textContent = formatMissionTitle(title);
   missionActiveTitle.title = formatMissionTitle(title);
+}
+
+function setMissionOverview(overview, updatedAt = null) {
+  activeSessionOverview = normalizeText(overview, "");
+  const numericUpdatedAt = Number(updatedAt);
+  activeSessionOverviewUpdatedAt = Number.isFinite(numericUpdatedAt) && numericUpdatedAt > 0 ? numericUpdatedAt : null;
+  renderMissionOverview();
+}
+
+function renderMissionOverview() {
+  const hasOverview = activeSessionOverview.trim().length > 0;
+  if (missionOverviewContent) {
+    const body = hasOverview
+      ? activeSessionOverview
+      : "_No overview yet._\n\nComplete a run and the agent will maintain a concise mission summary here.";
+    setMarkdownContent(missionOverviewContent, body);
+  }
+  if (!missionOverviewStatus) return;
+  if (!hasOverview) {
+    missionOverviewStatus.textContent = "Awaiting first run";
+    return;
+  }
+  const relative = activeSessionOverviewUpdatedAt ? formatRelativeTime(activeSessionOverviewUpdatedAt) : "";
+  missionOverviewStatus.textContent = relative ? `Updated ${relative}` : "Tracked summary";
 }
 
 function setUnlocked(unlocked) {
@@ -1869,6 +1897,7 @@ function setActiveSession(session) {
     }
   }
   syncActiveMissionHeader(missionTitle);
+  setMissionOverview(session?.overview, session?.overview_updated_at);
   renderSessionList();
   renderChatHistory(activeSessionMessages);
   syncMissionViewForActiveSession();
@@ -2475,6 +2504,9 @@ function handleStreamEvent(type, data, run) {
         setAssistantBubble(run, text);
         run.commitAssistant?.(text);
       }
+      if (data.result && typeof data.result === "object") {
+        setMissionOverview(data.result.mission_overview, data.result.mission_overview_updated_at);
+      }
       break;
     case "cancelled": {
       const message = normalizeText(data.message, "Run stopped by user.");
@@ -2951,6 +2983,7 @@ async function bootstrap() {
   restoreExecutionWidth();
   showExecutionTab("terminal");
   renderExecutionEmpty();
+  renderMissionOverview();
   renderGraph();
   if (hasGateway) {
     try {

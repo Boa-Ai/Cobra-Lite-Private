@@ -60,6 +60,7 @@ def _enqueue_progress(event_queue: queue.Queue, payload: dict[str, Any]) -> None
 
 
 GRAPH_UPDATE_BLOCK_RE = re.compile(r"<graph_update>\s*(.*?)\s*</graph_update>", re.IGNORECASE | re.DOTALL)
+MISSION_OVERVIEW_BLOCK_RE = re.compile(r"<mission_overview>\s*(.*?)\s*</mission_overview>", re.IGNORECASE | re.DOTALL)
 GRAPH_SUGGESTIONS_HEADER_RE = re.compile(r"^#{0,3}\s*graph suggestions\s*:?\s*$", re.IGNORECASE)
 ANTHROPIC_AUTH_INVALID_RE = re.compile(
     r"(invalid|incorrect|unauthorized|forbidden).*(x-api-key|api key)|authentication[_\s-]?error",
@@ -156,6 +157,16 @@ def _extract_graph_suggestions(text: str) -> tuple[str, list[dict[str, str]]]:
     cleaned_lines = lines[:start_idx] + lines[end_idx:]
     cleaned = "\n".join(cleaned_lines).strip()
     return cleaned, deduped
+
+
+def _extract_mission_overview_block(text: str) -> tuple[str, str | None]:
+    raw = str(text or "")
+    match = MISSION_OVERVIEW_BLOCK_RE.search(raw)
+    if not match:
+        return raw.strip(), None
+    overview = str(match.group(1) or "").strip()
+    cleaned = MISSION_OVERVIEW_BLOCK_RE.sub("", raw, count=1).strip()
+    return cleaned, overview or None
 
 
 def create_app() -> Flask:
@@ -511,6 +522,23 @@ def create_app() -> Flask:
 
         return created
 
+    def _finalize_agent_result(session_id: str, result: dict[str, Any]) -> tuple[dict[str, Any], int]:
+        final_text_raw = str(result.get("final_observation") or "Task completed.").strip()
+        text_without_graph_block, graph_update = _extract_graph_update_block(final_text_raw)
+        text_without_overview_block, mission_overview = _extract_mission_overview_block(text_without_graph_block)
+        final_text, graph_suggestions = _extract_graph_suggestions(text_without_overview_block)
+        created_graph_nodes = _apply_graph_updates(session_id, graph_update, graph_suggestions)
+        result["final_observation"] = final_text
+
+        overview_session = (
+            session_store.update_overview(session_id, mission_overview)
+            if mission_overview
+            else session_store.get_session(session_id)
+        ) or {}
+        result["mission_overview"] = str(overview_session.get("overview") or "")
+        result["mission_overview_updated_at"] = overview_session.get("overview_updated_at")
+        return result, created_graph_nodes
+
     def _resolve_session_id(payload: dict[str, Any]) -> str:
         requested = str(payload.get("session_id") or "").strip()
         if requested and session_store.get_session(requested):
@@ -684,6 +712,7 @@ def create_app() -> Flask:
 
         session_id = _resolve_session_id(payload)
         session_store.append_message(session_id, "user", prompt)
+        current_session = session_store.get_session(session_id) or {}
         gateway_url = effective_gateway_url(state_store.get_gateway_url())
         anthropic_api_key = _resolve_anthropic_key()
         if not anthropic_api_key:
@@ -702,14 +731,11 @@ def create_app() -> Flask:
                 session_id=session_id,
                 anthropic_api_key=anthropic_api_key,
                 graph_context=graph_context,
+                mission_overview=str(current_session.get("overview") or ""),
                 cancel_event=cancel_event,
             )
-            final_text_raw = str(result.get("final_observation") or "Task completed.").strip()
-            text_without_block, graph_update = _extract_graph_update_block(final_text_raw)
-            final_text, graph_suggestions = _extract_graph_suggestions(text_without_block)
-            created_graph_nodes = _apply_graph_updates(session_id, graph_update, graph_suggestions)
-            result["final_observation"] = final_text
-            session_store.append_message(session_id, "assistant", final_text)
+            result, created_graph_nodes = _finalize_agent_result(session_id, result)
+            session_store.append_message(session_id, "assistant", str(result.get("final_observation") or "Task completed."))
             return jsonify(
                 {
                     "ok": True,
@@ -741,6 +767,7 @@ def create_app() -> Flask:
 
         session_id = _resolve_session_id(payload)
         session_store.append_message(session_id, "user", prompt)
+        current_session = session_store.get_session(session_id) or {}
         gateway_url = effective_gateway_url(state_store.get_gateway_url())
         anthropic_api_key = _resolve_anthropic_key()
         if not anthropic_api_key:
@@ -769,15 +796,12 @@ def create_app() -> Flask:
                     session_id=session_id,
                     anthropic_api_key=anthropic_api_key,
                     graph_context=graph_context,
+                    mission_overview=str(current_session.get("overview") or ""),
                     progress_callback=emit,
                     cancel_event=cancel_event,
                 )
-                final_text_raw = str(result.get("final_observation") or "Task completed.").strip()
-                text_without_block, graph_update = _extract_graph_update_block(final_text_raw)
-                final_text, graph_suggestions = _extract_graph_suggestions(text_without_block)
-                created_graph_nodes = _apply_graph_updates(session_id, graph_update, graph_suggestions)
-                result["final_observation"] = final_text
-                session_store.append_message(session_id, "assistant", final_text)
+                result, created_graph_nodes = _finalize_agent_result(session_id, result)
+                session_store.append_message(session_id, "assistant", str(result.get("final_observation") or "Task completed."))
                 if created_graph_nodes > 0:
                     emit({"type": "graph_updated", "data": {"created_nodes": created_graph_nodes}})
                 emit({"type": "final_result", "data": {"result": result, "session_id": session_id, "run_id": run_id}})
