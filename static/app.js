@@ -86,7 +86,7 @@ let activeRunStopRequested = false;
 let activeRunMeta = null;
 const ACTIVE_SESSION_STORAGE_KEY = "cobraLite.activeSessionId.v1";
 const SESSION_PANE_COLLAPSED_KEY = "cobraLite.sessionPaneCollapsed.v1";
-const EXECUTION_WIDTH_STORAGE_KEY = "cobraLite.executionPaneWidth.v1";
+const EXECUTION_WIDTH_STORAGE_KEY = "cobraLite.executionPaneWidth.v2";
 const FILE_SELECTOR_HEIGHT_STORAGE_KEY = "cobraLite.filesSelectorHeight.v1";
 
 let activeSessionId = null;
@@ -511,10 +511,10 @@ function clampNumber(value, min, max) {
 }
 
 function getExecutionWidthBounds() {
-  const min = 300;
+  const min = 260;
   const currentExecution = executionPane?.getBoundingClientRect().width || min;
   const currentChat = chatColumn?.getBoundingClientRect().width || 0;
-  const max = Math.max(min, currentExecution + Math.max(0, currentChat - 420));
+  const max = Math.max(min, currentExecution + Math.max(0, currentChat - 520));
   return { min, max };
 }
 
